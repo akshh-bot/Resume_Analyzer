@@ -8,27 +8,51 @@ st.set_page_config(page_title="Resume Analyzer", page_icon="📄")
 # --- SESSION STORAGE & SETTINGS SIDEBAR ---
 st.sidebar.title("⚙️ Settings")
 
-# JavaScript bridge to read/write browser sessionStorage
-session_storage_code = """
+# Initialize session state for API key
+if "gemini_api_key" not in st.session_state:
+    st.session_state.gemini_api_key = ""
+
+# JavaScript bridge to sync Streamlit input with browser sessionStorage
+session_storage_bridge = """
 <script>
-const apiKeyInput = window.parent.document.querySelector('input[aria-label="Gemini API Key"]');
-// Function to sync session storage
-function getStorage() { return sessionStorage.getItem("gemini_api_key") || ""; }
-function setStorage(val) { sessionStorage.setItem("gemini_api_key", val); }
+const doc = window.parent.document;
+
+function initSessionStorageSync() {
+    const apiKeyInput = doc.querySelector('input[aria-label="Gemini API Key"]');
+    if (!apiKeyInput) {
+        setTimeout(initSessionStorageSync, 100);
+        return;
+    }
+
+    // Load existing session storage value if input is empty
+    const storedKey = sessionStorage.getItem("gemini_api_key");
+    if (storedKey && !apiKeyInput.value) {
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, "value").set;
+        nativeInputValueSetter.call(apiKeyInput, storedKey);
+        apiKeyInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    // Save to session storage on change
+    apiKeyInput.addEventListener('input', (e) => {
+        sessionStorage.setItem("gemini_api_key", e.target.value);
+    });
+}
+
+initSessionStorageSync();
 </script>
 """
+
+# Render the JavaScript bridge component (hidden)
+components.html(session_storage_bridge, height=0)
 
 # Render a sidebar text input for the API key
 api_key_input = st.sidebar.text_input(
     "Gemini API Key",
+    value=st.session_state.gemini_api_key,
     type="password",
     placeholder="Enter your AI Studio API key",
     help="Your key is stored only in your browser session storage."
 )
-
-# Fallback mechanism or direct assignment to session state
-if "gemini_api_key" not in st.session_state:
-    st.session_state.gemini_api_key = ""
 
 if api_key_input:
     st.session_state.gemini_api_key = api_key_input
